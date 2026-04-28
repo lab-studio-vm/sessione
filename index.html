@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyberball – Studio sperimentale</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    min-height: 100vh; width: 100%;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: linear-gradient(160deg, #1f2937 0%, #111827 100%);
+    color: #f5f5f5;
+    display: flex; align-items: center; justify-content: center;
+    padding: 40px 20px;
+  }
+  .container {
+    max-width: 720px; width: 100%;
+    background: #ffffff; color: #1f2937;
+    padding: 48px 56px; border-radius: 16px;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.35);
+  }
+  h1 {
+    font-size: 28px; margin-bottom: 10px; color: #111827;
+  }
+  .subtitle {
+    color: #6b7280; font-size: 15px; margin-bottom: 32px;
+    line-height: 1.5;
+  }
+  .cards { display: flex; flex-direction: column; gap: 16px; }
+  .card {
+    display: block; text-decoration: none;
+    border: 2px solid #e5e7eb; border-radius: 12px;
+    padding: 22px 26px;
+    transition: all 0.18s;
+    background: #fff;
+  }
+  .card:hover {
+    border-color: #2563eb;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.12);
+  }
+  .card-row {
+    display: flex; align-items: center; gap: 16px;
+  }
+  .card-icon {
+    width: 48px; height: 48px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 700; flex-shrink: 0;
+  }
+  .icon-pairing  { background: #dbeafe; color: #1e40af; }
+  .icon-inclus   { background: #dcfce7; color: #166534; }
+  .icon-esclus   { background: #fee2e2; color: #991b1b; }
+
+  .card-text { flex: 1; }
+  .card-title {
+    font-size: 17px; font-weight: 700;
+    color: #111827; margin-bottom: 4px;
+  }
+  .card-desc {
+    font-size: 13px; color: #6b7280; line-height: 1.45;
+  }
+  .card-arrow {
+    color: #9ca3af; font-size: 22px; flex-shrink: 0;
+    transition: transform 0.18s, color 0.18s;
+  }
+  .card:hover .card-arrow {
+    transform: translateX(4px); color: #2563eb;
+  }
+
+  .footer {
+    margin-top: 36px; padding-top: 20px;
+    border-top: 1px dashed #e5e7eb;
+    font-size: 12px; color: #9ca3af;
+    text-align: center;
+    letter-spacing: 0.3px;
+  }
+
+  @media (max-width: 520px) {
+    .container { padding: 32px 24px; }
+    .card { padding: 18px 20px; }
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Cyberball — Studio sperimentale</h1>
+    <p class="subtitle">
+      Pagina di accesso ai moduli della sessione. Il ricercatore seleziona
+      la fase corretta in base al protocollo del partecipante.
+    </p>
+
+    <div class="cards">
+
+      <a class="card" href="pairing.html">
+        <div class="card-row">
+          <div class="card-icon icon-pairing">1</div>
+          <div class="card-text">
+            <div class="card-title">Schermata di pairing</div>
+            <div class="card-desc">
+              Connessione fittizia con gli "altri giocatori" (~20 secondi).
+              Da mostrare al partecipante prima di avviare il gioco.
+            </div>
+          </div>
+          <div class="card-arrow">→</div>
+        </div>
+      </a>
+
+      <a class="card" href="gioco_inclusione.html">
+        <div class="card-row">
+          <div class="card-icon icon-inclus">A</div>
+          <div class="card-text">
+            <div class="card-title">Gioco — Modalità A (inclusione)</div>
+            <div class="card-desc">
+              Condizione di controllo: il partecipante riceve la palla con
+              pari probabilità.
+            </div>
+          </div>
+          <div class="card-arrow">→</div>
+        </div>
+      </a>
+
+      <a class="card" href="gioco_esclusione.html">
+        <div class="card-row">
+          <div class="card-icon icon-esclus">B</div>
+          <div class="card-text">
+            <div class="card-title">Gioco — Modalità B (esclusione)</div>
+            <div class="card-desc">
+              Condizione sperimentale: dopo poche ricezioni iniziali il
+              partecipante viene ostracizzato.
+            </div>
+          </div>
+          <div class="card-arrow">→</div>
+        </div>
+      </a>
+
+    </div>
+
+    <div class="footer">PAGINA INTERNA — NON MOSTRARE AL PARTECIPANTE</div>
+  </div>
+</body>
+</html>
