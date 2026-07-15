@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cyberball – Esclusione</title>
+<title>Gioco – Modalità B</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: #1a1a1a; color: #f5f5f5; }
@@ -83,8 +83,8 @@
       <ul>
         <li>Vedrai la scena dalla <strong>tua prospettiva in prima persona</strong>: davanti a te ci saranno due altri giocatori.</li>
         <li>Quando uno di loro ti passa la palla, <strong>dovrai decidere a chi ri-lanciarla</strong>.</li>
-        <li>Per lanciare al <strong>giocatore di sinistra</strong>, premi il tasto <span class="key-hint">←</span> (freccia sinistra).</li>
-        <li>Per lanciare al <strong>giocatore di destra</strong>, premi il tasto <span class="key-hint">→</span> (freccia destra).</li>
+        <li id="instr-left">Per lanciare al <strong>giocatore di sinistra</strong>, premi il tasto <span class="key-hint">←</span> (freccia sinistra).</li>
+        <li id="instr-right">Per lanciare al <strong>giocatore di destra</strong>, premi il tasto <span class="key-hint">→</span> (freccia destra).</li>
       </ul>
 
       <h2>Cosa fare durante il gioco</h2>
@@ -105,7 +105,7 @@
       <div class="hud-badge" id="hud-throws">Lanci totali: 0</div>
     </div>
     <div id="throw-prompt">
-      Hai la palla! Lancia a <span class="key-hint">←</span> riccardo_s oppure <span class="key-hint">→</span> federica.99
+      <span id="throw-prompt-text">Hai la palla! Lancia a <span class="key-hint">←</span> riccardo_s oppure <span class="key-hint">→</span> federica.99</span>
     </div>
   </div>
 
@@ -142,6 +142,9 @@ const CONFIG = {
 
 // CONDIZIONE FORZATA: questa pagina è SEMPRE esclusione
 const CONDITION = 'exclusion';
+
+// Dispositivo touch? (smartphone/tablet: si lancia toccando il lato dello schermo)
+const IS_TOUCH = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
 const POSITIONS = {
   P: { x: 0,    y: 1.55, z: 0 },
@@ -240,6 +243,13 @@ function initGame() {
   setupThreeScene();
   window.addEventListener('resize', onWindowResize);
   window.addEventListener('keydown', handleKeyPress);
+  document.getElementById('game-canvas-container').addEventListener('pointerdown', handlePointer);
+
+  // Su touch il prompt spiega il tocco invece delle frecce
+  if (IS_TOUCH) {
+    document.getElementById('throw-prompt-text').innerHTML =
+      'Hai la palla! Tocca a <strong>sinistra</strong> per lanciare a riccardo_s, a <strong>destra</strong> per federica.99';
+  }
 
   scene.updateMatrixWorld(true);
   camera.updateMatrixWorld(true);
@@ -557,7 +567,10 @@ function npcDecideTarget(currentHolder) {
   const remaining = CONFIG.EXCLUSION_CATCHES - state.participantReceived;
   if (remaining <= 0) return other;  // ostracismo
   const throwsLeftInWindow = Math.max(0, DEADLINE - state.throwCount);
-  if (throwsLeftInWindow <= remaining) return 'P';  // forza al partecipante
+  // Lancio forzato quando la finestra basta appena per la quota.
+  // Servono 2*remaining - 1 lanci: dopo ogni ricezione (tranne l'ultima)
+  // il partecipante consuma un lancio per restituire la palla.
+  if (throwsLeftInWindow <= 2 * remaining - 1) return 'P';
   const probP = remaining / throwsLeftInWindow;
   return Math.random() < probP ? 'P' : other;
 }
@@ -691,6 +704,14 @@ function handleKeyPress(e) {
   else if (e.key === 'ArrowRight') startThrow('P', 'B');
 }
 
+// Tocco (o click) sulla metà sinistra/destra dello schermo per lanciare
+function handlePointer(e) {
+  if (!state.gameActive || !state.waitingForInput) return;
+  if (state.currentHolder !== 'P') return;
+  if (e.clientX < window.innerWidth / 2) startThrow('P', 'A');
+  else startThrow('P', 'B');
+}
+
 function onWindowResize() {
   if (!camera || !renderer) return;
   const container = document.getElementById('game-canvas-container');
@@ -730,6 +751,7 @@ function endGame() {
   state.gameActive = false;
   state.endTimestamp = new Date().toISOString();
   window.removeEventListener('keydown', handleKeyPress);
+  document.getElementById('game-canvas-container').removeEventListener('pointerdown', handlePointer);
   setTimeout(() => { showScreen('end-screen'); }, 800);
 }
 
@@ -737,6 +759,14 @@ function endGame() {
 document.addEventListener('DOMContentLoaded', () => {
   setupNickname();
   setupInstructions();
+
+  // Sui dispositivi touch le istruzioni spiegano il tocco invece delle frecce
+  if (IS_TOUCH) {
+    document.getElementById('instr-left').innerHTML =
+      'Per lanciare al <strong>giocatore di sinistra</strong>, tocca la <strong>metà sinistra</strong> dello schermo.';
+    document.getElementById('instr-right').innerHTML =
+      'Per lanciare al <strong>giocatore di destra</strong>, tocca la <strong>metà destra</strong> dello schermo.';
+  }
 });
 </script>
 </body>
