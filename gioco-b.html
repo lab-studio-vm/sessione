@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gioco – Modalità B</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: #1a1a1a; color: #f5f5f5; }
+  #app { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+
+  .screen { position: absolute; inset: 0; display: none; overflow-y: auto; padding: 40px 20px; background: linear-gradient(160deg, #1f2937 0%, #111827 100%); }
+  .screen.active { display: block; }
+  .screen-inner { max-width: 760px; margin: 0 auto; background: #ffffff; color: #1f2937; padding: 48px 56px; border-radius: 12px; box-shadow: 0 24px 48px rgba(0,0,0,0.35); }
+  h1 { font-size: 28px; margin-bottom: 16px; color: #111827; }
+  h2 { font-size: 20px; margin: 28px 0 12px; color: #111827; }
+  p { line-height: 1.6; margin-bottom: 14px; color: #374151; }
+  ul { margin: 0 0 14px 22px; }
+  ul li { line-height: 1.6; margin-bottom: 6px; color: #374151; }
+
+  .form-row { margin-bottom: 18px; }
+  .form-row label { display: block; font-weight: 600; margin-bottom: 6px; color: #111827; font-size: 14px; }
+  .form-row input[type="text"] {
+    width: 100%; padding: 12px 14px; font-size: 16px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; color: #111827;
+  }
+  .form-row input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); }
+  .error-msg { color: #dc2626; font-size: 13px; margin-top: 6px; display: none; }
+  .error-msg.visible { display: block; }
+
+  .btn { display: inline-block; padding: 12px 28px; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .btn-primary { background: #2563eb; color: white; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-primary:disabled { background: #9ca3af; cursor: not-allowed; }
+  .btn-secondary { background: #e5e7eb; color: #1f2937; }
+  .btn-secondary:hover { background: #d1d5db; }
+  .actions { margin-top: 28px; display: flex; justify-content: flex-end; gap: 12px; }
+
+  .key-hint { display: inline-block; background: #374151; color: #fff; padding: 4px 10px; border-radius: 4px; font-family: monospace; margin: 0 4px; font-weight: 700; }
+
+  /* Game screen */
+  #game-screen { background: #87CEEB; display: none; }
+  #game-screen.active { display: block; }
+  #game-canvas-container { position: absolute; inset: 0; }
+  #game-canvas-container canvas { display: block; width: 100%; height: 100%; }
+  #game-hud { position: absolute; top: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between; pointer-events: none; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,0.6); z-index: 10; }
+  .hud-badge { background: rgba(0,0,0,0.45); padding: 8px 14px; border-radius: 20px; font-size: 13px; backdrop-filter: blur(6px); }
+  .hud-badge.you { background: rgba(37,99,235,0.55); border: 1px solid rgba(255,255,255,0.25); }
+  #throw-prompt { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); color: #fff; padding: 14px 22px; border-radius: 10px; font-size: 16px; font-weight: 600; display: none; z-index: 10; pointer-events: none; }
+  #throw-prompt.visible { display: block; }
+
+  .thankyou-icon { font-size: 56px; text-align: center; margin-bottom: 16px; color: #4ade80; }
+  .badge-mode { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; background: #fee2e2; color: #991b1b; margin-left: 8px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- SCHERMATA 1: NICKNAME -->
+  <div id="nickname-screen" class="screen active">
+    <div class="screen-inner">
+      <h1>Benvenuto al gioco <span class="badge-mode">Modalità B</span></h1>
+      <p>Per iniziare inserisci un <strong>nickname</strong>. Verrà mostrato agli altri giocatori durante la sessione.</p>
+
+      <div class="form-row">
+        <label for="nickname-input">Nickname</label>
+        <input type="text" id="nickname-input" placeholder="es. il tuo nome o un soprannome" autocomplete="off" maxlength="24">
+        <div class="error-msg" id="err-nickname">Inserisci un nickname (almeno 2 caratteri).</div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="nickname-next-btn">Continua</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCHERMATA 2: ISTRUZIONI -->
+  <div id="instructions-screen" class="screen">
+    <div class="screen-inner">
+      <h1>Istruzioni del gioco</h1>
+      <p>Tra poco giocherai a un semplice gioco di lancio della palla insieme ad altri due giocatori, in un ambiente virtuale (un parco).</p>
+
+      <h2>Come si gioca</h2>
+      <ul>
+        <li>Vedrai la scena dalla <strong>tua prospettiva in prima persona</strong>: davanti a te ci saranno due altri giocatori.</li>
+        <li>Quando uno di loro ti passa la palla, <strong>dovrai decidere a chi ri-lanciarla</strong>.</li>
+        <li id="instr-left">Per lanciare al <strong>giocatore di sinistra</strong>, premi il tasto <span class="key-hint">←</span> (freccia sinistra).</li>
+        <li id="instr-right">Per lanciare al <strong>giocatore di destra</strong>, premi il tasto <span class="key-hint">→</span> (freccia destra).</li>
+      </ul>
+
+      <h2>Cosa fare durante il gioco</h2>
+      <p>La ricerca si occupa delle <strong>capacità di visualizzazione mentale</strong>. Mentre giochi, prova a <strong>visualizzare chiaramente la scena</strong> nella tua mente: immagina di essere davvero lì nel parco, immagina il tempo, i suoni, l'erba, le persone con cui stai giocando.</p>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="instructions-next-btn">Sono pronto, iniziamo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCHERMATA 3: GIOCO 3D -->
+  <div id="game-screen" class="screen">
+    <div id="game-canvas-container"></div>
+    <div id="game-hud">
+      <div class="hud-badge" id="hud-status">Partita in corso</div>
+      <div class="hud-badge you" id="hud-self">Tu</div>
+      <div class="hud-badge" id="hud-throws">Lanci totali: 0</div>
+    </div>
+    <div id="throw-prompt">
+      <span id="throw-prompt-text">Hai la palla! Lancia a <span class="key-hint">←</span> riccardo_s oppure <span class="key-hint">→</span> federica.99</span>
+    </div>
+  </div>
+
+  <!-- SCHERMATA 4: FINE -->
+  <div id="end-screen" class="screen">
+    <div class="screen-inner">
+      <div class="thankyou-icon">✓</div>
+      <h1 style="text-align:center">Gioco completato</h1>
+      <p style="text-align:center; font-size: 16px; margin: 20px 0;">Hai terminato la sessione di gioco. Grazie per aver partecipato.</p>
+      <p style="text-align:center; font-size: 15px; color: #6b7280; margin-bottom: 10px;">Puoi tornare alla schermata iniziale.</p>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Three.js r128 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+/* =========================================================================
+   CYBERBALL — Modalità ESCLUSIONE (il partecipante riceve esattamente
+   EXCLUSION_CATCHES volte nella prima parte e poi viene ostracizzato).
+   ========================================================================= */
+
+// ---------- CONFIGURAZIONE ----------
+const CONFIG = {
+  TOTAL_THROWS: 30,
+  EXCLUSION_CATCHES: 2,           // n. ricezioni del partecipante prima dell'ostracismo
+  NPC_THROW_DELAY_MIN: 900,
+  NPC_THROW_DELAY_MAX: 2100,
+  BALL_FLIGHT_MS: 800,
+};
+
+// CONDIZIONE FORZATA: questa pagina è SEMPRE esclusione
+const CONDITION = 'exclusion';
+
+// Dispositivo touch? (smartphone/tablet: si lancia toccando il lato dello schermo)
+const IS_TOUCH = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+const POSITIONS = {
+  P: { x: 0,    y: 1.55, z: 0 },
+  A: { x: -2.8, y: 1.55, z: -4 },
+  B: { x: 2.8,  y: 1.55, z: -4 },
+};
+
+// Nickname dei due "altri giocatori" (NPC). Coerenti con la schermata di pairing.
+const NICK = {
+  A: 'riccardo_s',
+  B: 'federica.99'
+};
+
+// "Personalità" temporale di ogni NPC: bias sul tempo di pensiero per
+// far sembrare due giocatori reali con tempi di reazione diversi.
+// Inizializzato a inizio partita in initGame().
+let NPC_SPEED_BIAS = { A: 1.0, B: 1.0 };
+
+const state = {
+  nickname: null,
+  condition: CONDITION,
+  startTimestamp: null,
+  endTimestamp: null,
+  currentHolder: null,
+  throwCount: 0,
+  participantReceived: 0,
+  throwsLog: [],
+  ballHeldTimestamp: null,
+  gameActive: false,
+  waitingForInput: false,
+};
+
+// ---------- GESTIONE SCHERMATE ----------
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// ---------- SCHERMATA 1: NICKNAME ----------
+function setupNickname() {
+  const input = document.getElementById('nickname-input');
+  const btn = document.getElementById('nickname-next-btn');
+  const err = document.getElementById('err-nickname');
+
+  // Focus automatico
+  setTimeout(() => input.focus(), 100);
+
+  const submit = () => {
+    const v = input.value.trim();
+    if (v.length < 2) { err.classList.add('visible'); input.focus(); return; }
+    err.classList.remove('visible');
+    state.nickname = v;
+    showScreen('instructions-screen');
+  };
+  btn.addEventListener('click', submit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); submit(); }
+    if (e.key !== 'Enter') err.classList.remove('visible');
+  });
+}
+
+// ---------- SCHERMATA 2: ISTRUZIONI ----------
+function setupInstructions() {
+  document.getElementById('instructions-next-btn').addEventListener('click', () => {
+    showScreen('game-screen');
+    initGame();
+  });
+}
+
+// =========================================================================
+// GIOCO 3D CON THREE.JS
+// =========================================================================
+
+let scene, camera, renderer, ball, npcA, npcB;
+let firstPersonArms;
+let throwAnimation = null;
+
+function initGame() {
+  state.startTimestamp = new Date().toISOString();
+  state.throwCount = 0;
+  state.participantReceived = 0;
+  state.throwsLog = [];
+  state.gameActive = true;
+
+  // Nickname utente nella HUD
+  document.getElementById('hud-self').textContent = 'Tu: ' + state.nickname;
+
+  // Bias di velocità per ciascun NPC (varia da sessione a sessione, così
+  // ogni partita "sembra" di essere giocata da persone diverse).
+  NPC_SPEED_BIAS = {
+    A: 0.7 + Math.random() * 0.7,   // 0.7 - 1.4
+    B: 0.7 + Math.random() * 0.7,
+  };
+
+  setupThreeScene();
+  window.addEventListener('resize', onWindowResize);
+  window.addEventListener('keydown', handleKeyPress);
+  document.getElementById('game-canvas-container').addEventListener('pointerdown', handlePointer);
+
+  // Su touch il prompt spiega il tocco invece delle frecce
+  if (IS_TOUCH) {
+    document.getElementById('throw-prompt-text').innerHTML =
+      'Hai la palla! Tocca a <strong>sinistra</strong> per lanciare a riccardo_s, a <strong>destra</strong> per federica.99';
+  }
+
+  scene.updateMatrixWorld(true);
+  camera.updateMatrixWorld(true);
+
+  const firstHolder = Math.random() < 0.5 ? 'A' : 'B';
+  state.currentHolder = firstHolder;
+  placeBallAt(firstHolder);
+  updateHUD();
+  scheduleNpcThrow();
+  animate();
+}
+
+function setupThreeScene() {
+  const container = document.getElementById('game-canvas-container');
+  container.innerHTML = '';
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87CEEB);
+  scene.fog = new THREE.Fog(0x87CEEB, 25, 80);
+
+  camera = new THREE.PerspectiveCamera(65, container.clientWidth / container.clientHeight, 0.1, 500);
+  camera.position.set(POSITIONS.P.x, POSITIONS.P.y, POSITIONS.P.z);
+  camera.lookAt(0, 1.4, -4);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  container.appendChild(renderer.domElement);
+
+  const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+  scene.add(ambient);
+  const sun = new THREE.DirectionalLight(0xfff1d6, 0.85);
+  sun.position.set(10, 20, 8);
+  sun.castShadow = true;
+  sun.shadow.mapSize.width = 1024;
+  sun.shadow.mapSize.height = 1024;
+  sun.shadow.camera.left = -20;
+  sun.shadow.camera.right = 20;
+  sun.shadow.camera.top = 20;
+  sun.shadow.camera.bottom = -20;
+  scene.add(sun);
+
+  const grassGeo = new THREE.PlaneGeometry(200, 200, 1, 1);
+  const grassMat = new THREE.MeshLambertMaterial({ color: 0x6ab04c });
+  const grass = new THREE.Mesh(grassGeo, grassMat);
+  grass.rotation.x = -Math.PI / 2;
+  grass.receiveShadow = true;
+  scene.add(grass);
+
+  const pathMat = new THREE.MeshLambertMaterial({ color: 0x8db862 });
+  const path = new THREE.Mesh(new THREE.CircleGeometry(4.5, 32), pathMat);
+  path.rotation.x = -Math.PI / 2;
+  path.position.set(0, 0.01, -2.5);
+  path.receiveShadow = true;
+  scene.add(path);
+
+  addScenery();
+
+  npcA = createHumanoid(0xe63946, 0x1d3557);
+  npcA.position.set(POSITIONS.A.x, 0, POSITIONS.A.z);
+  npcA.rotation.y = Math.PI / 7;
+  const labelA = createNameLabel(NICK.A);
+  labelA.position.y = 2.45;  // sopra la testa/capelli (~1.86)
+  npcA.add(labelA);
+  scene.add(npcA);
+
+  npcB = createHumanoid(0xf4a261, 0x264653);
+  npcB.position.set(POSITIONS.B.x, 0, POSITIONS.B.z);
+  npcB.rotation.y = -Math.PI / 7;
+  const labelB = createNameLabel(NICK.B);
+  labelB.position.y = 2.45;
+  npcB.add(labelB);
+  scene.add(npcB);
+
+  ball = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 24, 24),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0.05 })
+  );
+  ball.castShadow = true;
+  scene.add(ball);
+
+  firstPersonArms = createFirstPersonArms();
+  camera.add(firstPersonArms);
+  scene.add(camera);
+}
+
+function addScenery() {
+  const treePositions = [
+    [-8, -10], [-10, -3], [-12, 5], [-6, 8],
+    [8, -12], [12, -5], [11, 4], [7, 9],
+    [-14, -14], [14, -14], [0, -18], [-18, 0], [18, 0],
+    [-5, -15], [5, -15], [-9, 12], [9, 12]
+  ];
+  treePositions.forEach(([x, z]) => {
+    const tree = createTree();
+    tree.position.set(x, 0, z);
+    tree.rotation.y = Math.random() * Math.PI * 2;
+    const s = 0.85 + Math.random() * 0.4;
+    tree.scale.set(s, s, s);
+    scene.add(tree);
+  });
+
+  for (let i = 0; i < 8; i++) {
+    const bush = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5 + Math.random() * 0.3, 8, 6),
+      new THREE.MeshLambertMaterial({ color: 0x3a8040 })
+    );
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 7 + Math.random() * 8;
+    bush.position.set(Math.cos(angle) * dist, 0.4, Math.sin(angle) * dist - 2);
+    bush.castShadow = true;
+    bush.receiveShadow = true;
+    scene.add(bush);
+  }
+
+  for (let i = 0; i < 5; i++) {
+    const cloud = new THREE.Mesh(
+      new THREE.SphereGeometry(1.2, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 })
+    );
+    cloud.position.set(-20 + Math.random() * 40, 15 + Math.random() * 5, -15 - Math.random() * 20);
+    cloud.scale.set(1 + Math.random(), 0.5, 1);
+    scene.add(cloud);
+  }
+}
+
+function createTree() {
+  const tree = new THREE.Group();
+  const trunkH = 1.8 + Math.random() * 0.8;
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.18, 0.25, trunkH, 8),
+    new THREE.MeshLambertMaterial({ color: 0x6b4423 })
+  );
+  trunk.position.y = trunkH / 2;
+  trunk.castShadow = true;
+  tree.add(trunk);
+
+  const foliageColor = 0x2d7a3a + Math.floor(Math.random() * 0x001200);
+  if (Math.random() < 0.5) {
+    const foliage = new THREE.Mesh(
+      new THREE.ConeGeometry(1.3, 2.8, 8),
+      new THREE.MeshLambertMaterial({ color: foliageColor })
+    );
+    foliage.position.y = trunkH + 1.4;
+    foliage.castShadow = true;
+    tree.add(foliage);
+  } else {
+    const foliage = new THREE.Mesh(
+      new THREE.SphereGeometry(1.3, 10, 8),
+      new THREE.MeshLambertMaterial({ color: foliageColor })
+    );
+    foliage.position.y = trunkH + 1.0;
+    foliage.castShadow = true;
+    tree.add(foliage);
+  }
+  return tree;
+}
+
+// Crea un'etichetta-sprite (billboard) con il nickname da posizionare sopra la testa
+function createNameLabel(text) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+
+  // Sfondo arrotondato semitrasparente
+  const w = canvas.width, h = canvas.height, r = 30;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.lineTo(w - r, 0); ctx.quadraticCurveTo(w, 0, w, r);
+  ctx.lineTo(w, h - r); ctx.quadraticCurveTo(w, h, w - r, h);
+  ctx.lineTo(r, h);     ctx.quadraticCurveTo(0, h, 0, h - r);
+  ctx.lineTo(0, r);     ctx.quadraticCurveTo(0, 0, r, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // Testo bianco centrato
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 60px Helvetica, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, w / 2, h / 2);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.LinearFilter;
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(1.6, 0.4, 1);
+  return sprite;
+}
+
+function createHumanoid(shirtColor, pantsColor) {
+  const g = new THREE.Group();
+  const skinMat = new THREE.MeshLambertMaterial({ color: 0xf5c8a5 });
+  const shirtMat = new THREE.MeshLambertMaterial({ color: shirtColor });
+  const pantsMat = new THREE.MeshLambertMaterial({ color: pantsColor });
+  const hairMat = new THREE.MeshLambertMaterial({ color: 0x3e2723 });
+
+  const legGeo = new THREE.BoxGeometry(0.18, 0.8, 0.22);
+  const lLeg = new THREE.Mesh(legGeo, pantsMat);
+  lLeg.position.set(-0.13, 0.4, 0); lLeg.castShadow = true; g.add(lLeg);
+  const rLeg = new THREE.Mesh(legGeo, pantsMat);
+  rLeg.position.set(0.13, 0.4, 0); rLeg.castShadow = true; g.add(rLeg);
+
+  const shoeGeo = new THREE.BoxGeometry(0.22, 0.1, 0.32);
+  const shoeMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+  const lShoe = new THREE.Mesh(shoeGeo, shoeMat);
+  lShoe.position.set(-0.13, 0.05, 0.04); g.add(lShoe);
+  const rShoe = new THREE.Mesh(shoeGeo, shoeMat);
+  rShoe.position.set(0.13, 0.05, 0.04); g.add(rShoe);
+
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.65, 0.28), shirtMat);
+  torso.position.y = 1.13; torso.castShadow = true; g.add(torso);
+
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.1, 8), skinMat);
+  neck.position.y = 1.5; g.add(neck);
+
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.32, 0.28), skinMat);
+  head.position.y = 1.72; head.castShadow = true; g.add(head);
+
+  const hair = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 0.3), hairMat);
+  hair.position.y = 1.86; g.add(hair);
+
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+  const eyeGeo = new THREE.SphereGeometry(0.025, 8, 8);
+  const eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-0.06, 1.74, 0.14); g.add(eyeL);
+  const eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(0.06, 1.74, 0.14); g.add(eyeR);
+  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.015, 0.01), eyeMat);
+  mouth.position.set(0, 1.66, 0.14); g.add(mouth);
+
+  const shoulderL = new THREE.Group();
+  shoulderL.position.set(-0.3, 1.38, 0);
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.55, 0.14), shirtMat);
+  armL.position.y = -0.25; armL.castShadow = true;
+  const handL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 0.14), skinMat);
+  handL.position.y = -0.58;
+  shoulderL.add(armL); shoulderL.add(handL); g.add(shoulderL);
+
+  const shoulderR = new THREE.Group();
+  shoulderR.position.set(0.3, 1.38, 0);
+  const armR = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.55, 0.14), shirtMat);
+  armR.position.y = -0.25; armR.castShadow = true;
+  const handR = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 0.14), skinMat);
+  handR.position.y = -0.58;
+  shoulderR.add(armR); shoulderR.add(handR); g.add(shoulderR);
+
+  g.userData.shoulderL = shoulderL;
+  g.userData.shoulderR = shoulderR;
+  g.userData.throwAnim = 0;
+  return g;
+}
+
+function createFirstPersonArms() {
+  const g = new THREE.Group();
+  const skinMat = new THREE.MeshLambertMaterial({ color: 0xf5c8a5 });
+  const shirtMat = new THREE.MeshLambertMaterial({ color: 0x3f51b5 });
+
+  const armLGeo = new THREE.BoxGeometry(0.12, 0.5, 0.12);
+  const leftSleeve = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.2, 0.13), shirtMat);
+  leftSleeve.position.set(-0.28, -0.35, -0.5); leftSleeve.rotation.x = -0.2; g.add(leftSleeve);
+  const leftArm = new THREE.Mesh(armLGeo, skinMat);
+  leftArm.position.set(-0.28, -0.5, -0.65); leftArm.rotation.x = -0.4; g.add(leftArm);
+  const leftHand = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.12, 0.12), skinMat);
+  leftHand.position.set(-0.28, -0.7, -0.85); g.add(leftHand);
+
+  const rightSleeve = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.2, 0.13), shirtMat);
+  rightSleeve.position.set(0.28, -0.35, -0.5); rightSleeve.rotation.x = -0.2; g.add(rightSleeve);
+  const rightArm = new THREE.Mesh(armLGeo, skinMat);
+  rightArm.position.set(0.28, -0.5, -0.65); rightArm.rotation.x = -0.4; g.add(rightArm);
+  const rightHand = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.12, 0.12), skinMat);
+  rightHand.position.set(0.28, -0.7, -0.85); g.add(rightHand);
+
+  g.userData.leftArmParts = [leftSleeve, leftArm, leftHand];
+  g.userData.rightArmParts = [rightSleeve, rightArm, rightHand];
+  g.userData.basePositions = {
+    leftSleeve: leftSleeve.position.clone(),
+    leftArm: leftArm.position.clone(),
+    leftHand: leftHand.position.clone(),
+    rightSleeve: rightSleeve.position.clone(),
+    rightArm: rightArm.position.clone(),
+    rightHand: rightHand.position.clone(),
+  };
+  return g;
+}
+
+function getHoldingPosition(holder) {
+  if (holder === 'P') {
+    const p = new THREE.Vector3(0, -0.55, -0.9); camera.localToWorld(p); return p;
+  }
+  if (holder === 'A') { const p = new THREE.Vector3(0.3, 0.9, 0.1); npcA.localToWorld(p); return p; }
+  if (holder === 'B') { const p = new THREE.Vector3(-0.3, 0.9, 0.1); npcB.localToWorld(p); return p; }
+}
+
+function placeBallAt(holder) { ball.position.copy(getHoldingPosition(holder)); }
+
+function updateHUD() {
+  document.getElementById('hud-throws').textContent = 'Lanci totali: ' + state.throwCount;
+  const hudStatus = document.getElementById('hud-status');
+  if (state.currentHolder === 'P') hudStatus.textContent = 'Hai la palla';
+  else if (state.currentHolder === 'A') hudStatus.textContent = NICK.A + ' ha la palla';
+  else if (state.currentHolder === 'B') hudStatus.textContent = NICK.B + ' ha la palla';
+}
+function showThrowPrompt(show) { document.getElementById('throw-prompt').classList.toggle('visible', show); }
+
+// ====== LOGICA ESCLUSIONE ======
+// Garantiamo esattamente EXCLUSION_CATCHES ricezioni del partecipante entro
+// una finestra iniziale (DEADLINE = lancio 8). Dopodiché ostracismo totale:
+// gli NPC si passano la palla solo tra di loro fino a fine partita.
+function npcDecideTarget(currentHolder) {
+  const other = currentHolder === 'A' ? 'B' : 'A';
+  const DEADLINE = 8;
+  const remaining = CONFIG.EXCLUSION_CATCHES - state.participantReceived;
+  if (remaining <= 0) return other;  // ostracismo
+  const throwsLeftInWindow = Math.max(0, DEADLINE - state.throwCount);
+  // Lancio forzato quando la finestra basta appena per la quota.
+  // Servono 2*remaining - 1 lanci: dopo ogni ricezione (tranne l'ultima)
+  // il partecipante consuma un lancio per restituire la palla.
+  if (throwsLeftInWindow <= 2 * remaining - 1) return 'P';
+  const probP = remaining / throwsLeftInWindow;
+  return Math.random() < probP ? 'P' : other;
+}
+
+// Calcola il delay di "pensiero" di un NPC. Distribuzione variabile per
+// far sembrare due giocatori umani reali con tempi di reazione diversi:
+//   - base random in 700-3000 ms
+//   - circa 12% di pause più lunghe (giocatore "che ci pensa") con +1.5-3.5 s
+//   - bias per NPC, fissato a inizio partita in NPC_SPEED_BIAS
+function computeNpcDelay(npcId) {
+  let delay = 700 + Math.random() * 2300;
+  if (Math.random() < 0.12) {
+    delay += 1500 + Math.random() * 2000;
+  }
+  return delay * (NPC_SPEED_BIAS[npcId] || 1.0);
+}
+
+function scheduleNpcThrow() {
+  if (!state.gameActive) return;
+  if (state.currentHolder === 'P') return;
+  const delay = computeNpcDelay(state.currentHolder);
+  setTimeout(() => {
+    if (!state.gameActive) return;
+    if (state.currentHolder === 'P') return;
+    const target = npcDecideTarget(state.currentHolder);
+    startThrow(state.currentHolder, target);
+  }, delay);
+}
+
+function startThrow(from, to) {
+  if (!state.gameActive) return;
+  state.waitingForInput = false;
+  showThrowPrompt(false);
+
+  const now = performance.now();
+  const holdDuration = state.ballHeldTimestamp ? (now - state.ballHeldTimestamp) : null;
+  state.throwCount++;
+  state.throwsLog.push({
+    throw_num: state.throwCount,
+    from: from, to: to,
+    hold_duration_ms: holdDuration ? Math.round(holdDuration) : null,
+    timestamp: new Date().toISOString()
+  });
+
+  if (from === 'A') triggerNpcThrowAnim(npcA);
+  if (from === 'B') triggerNpcThrowAnim(npcB);
+  if (from === 'P') triggerFirstPersonThrowAnim(to);
+
+  const startPos = getHoldingPosition(from).clone();
+  const endPos = getHoldingPosition(to).clone();
+  const duration = CONFIG.BALL_FLIGHT_MS;
+  const startTime = performance.now();
+  const arcHeight = 1.0 + startPos.distanceTo(endPos) * 0.15;
+
+  throwAnimation = {
+    startTime, duration, startPos, endPos, arcHeight,
+    onComplete: () => {
+      state.currentHolder = to;
+      placeBallAt(to);
+      state.ballHeldTimestamp = performance.now();
+      updateHUD();
+      if (to === 'P') state.participantReceived++;
+      if (state.throwCount >= CONFIG.TOTAL_THROWS) { endGame(); return; }
+      if (to === 'P') { state.waitingForInput = true; showThrowPrompt(true); }
+      else { scheduleNpcThrow(); }
+    }
+  };
+}
+
+function triggerNpcThrowAnim(npc) { npc.userData.throwAnim = 1.0; }
+function updateNpcAnimations(dt) {
+  [npcA, npcB].forEach(npc => {
+    if (npc.userData.throwAnim > 0) {
+      const t = npc.userData.throwAnim;
+      const rotX = -Math.PI * 0.6 * Math.sin((1 - t) * Math.PI);
+      npc.userData.shoulderR.rotation.x = rotX;
+      npc.userData.throwAnim -= dt * 3;
+      if (npc.userData.throwAnim <= 0) {
+        npc.userData.throwAnim = 0;
+        npc.userData.shoulderR.rotation.x = 0;
+      }
+    }
+  });
+}
+
+let fpThrowAnim = { active: false, t: 0, duration: 0.4, side: 'L' };
+function triggerFirstPersonThrowAnim(targetSide) {
+  fpThrowAnim.active = true; fpThrowAnim.t = 0;
+  fpThrowAnim.side = (targetSide === 'A') ? 'L' : 'R';
+}
+function updateFirstPersonArms(dt) {
+  if (!firstPersonArms) return;
+  const base = firstPersonArms.userData.basePositions;
+  if (fpThrowAnim.active) {
+    fpThrowAnim.t += dt;
+    const progress = Math.min(1, fpThrowAnim.t / fpThrowAnim.duration);
+    const sinWave = Math.sin(progress * Math.PI);
+    const lift = sinWave * 0.3;
+    const forward = sinWave * 0.15;
+    if (fpThrowAnim.side === 'L') {
+      firstPersonArms.userData.leftArmParts.forEach((mesh, i) => {
+        const names = ['leftSleeve', 'leftArm', 'leftHand'];
+        mesh.position.y = base[names[i]].y + lift;
+        mesh.position.z = base[names[i]].z - forward;
+      });
+    } else {
+      firstPersonArms.userData.rightArmParts.forEach((mesh, i) => {
+        const names = ['rightSleeve', 'rightArm', 'rightHand'];
+        mesh.position.y = base[names[i]].y + lift;
+        mesh.position.z = base[names[i]].z - forward;
+      });
+    }
+    if (progress >= 1) {
+      fpThrowAnim.active = false;
+      firstPersonArms.userData.leftArmParts.forEach((mesh, i) => {
+        const names = ['leftSleeve', 'leftArm', 'leftHand'];
+        mesh.position.copy(base[names[i]]);
+      });
+      firstPersonArms.userData.rightArmParts.forEach((mesh, i) => {
+        const names = ['rightSleeve', 'rightArm', 'rightHand'];
+        mesh.position.copy(base[names[i]]);
+      });
+    }
+  }
+}
+
+function handleKeyPress(e) {
+  if (!state.gameActive || !state.waitingForInput) return;
+  if (state.currentHolder !== 'P') return;
+  if (e.key === 'ArrowLeft') startThrow('P', 'A');
+  else if (e.key === 'ArrowRight') startThrow('P', 'B');
+}
+
+// Tocco (o click) sulla metà sinistra/destra dello schermo per lanciare
+function handlePointer(e) {
+  if (!state.gameActive || !state.waitingForInput) return;
+  if (state.currentHolder !== 'P') return;
+  if (e.clientX < window.innerWidth / 2) startThrow('P', 'A');
+  else startThrow('P', 'B');
+}
+
+function onWindowResize() {
+  if (!camera || !renderer) return;
+  const container = document.getElementById('game-canvas-container');
+  camera.aspect = container.clientWidth / container.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(container.clientWidth, container.clientHeight);
+}
+
+let lastFrame = performance.now();
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = (now - lastFrame) / 1000;
+  lastFrame = now;
+
+  if (throwAnimation) {
+    const elapsed = now - throwAnimation.startTime;
+    const t = Math.min(1, elapsed / throwAnimation.duration);
+    const x = throwAnimation.startPos.x + (throwAnimation.endPos.x - throwAnimation.startPos.x) * t;
+    const z = throwAnimation.startPos.z + (throwAnimation.endPos.z - throwAnimation.startPos.z) * t;
+    const baseY = throwAnimation.startPos.y + (throwAnimation.endPos.y - throwAnimation.startPos.y) * t;
+    const y = baseY + throwAnimation.arcHeight * Math.sin(Math.PI * t);
+    ball.position.set(x, y, z);
+    ball.rotation.x += 0.15; ball.rotation.z += 0.08;
+    if (t >= 1) { const cb = throwAnimation.onComplete; throwAnimation = null; cb(); }
+  }
+
+  if (npcA && !throwAnimation) npcA.position.y = Math.sin(now * 0.002) * 0.01;
+  if (npcB && !throwAnimation) npcB.position.y = Math.sin(now * 0.002 + 1) * 0.01;
+
+  updateNpcAnimations(dt);
+  updateFirstPersonArms(dt);
+  if (renderer && scene && camera) renderer.render(scene, camera);
+}
+
+function endGame() {
+  state.gameActive = false;
+  state.endTimestamp = new Date().toISOString();
+  window.removeEventListener('keydown', handleKeyPress);
+  document.getElementById('game-canvas-container').removeEventListener('pointerdown', handlePointer);
+  setTimeout(() => { showScreen('end-screen'); }, 800);
+}
+
+// ---------- INIZIALIZZAZIONE ----------
+document.addEventListener('DOMContentLoaded', () => {
+  setupNickname();
+  setupInstructions();
+
+  // Sui dispositivi touch le istruzioni spiegano il tocco invece delle frecce
+  if (IS_TOUCH) {
+    document.getElementById('instr-left').innerHTML =
+      'Per lanciare al <strong>giocatore di sinistra</strong>, tocca la <strong>metà sinistra</strong> dello schermo.';
+    document.getElementById('instr-right').innerHTML =
+      'Per lanciare al <strong>giocatore di destra</strong>, tocca la <strong>metà destra</strong> dello schermo.';
+  }
+});
+</script>
+</body>
+</html>
