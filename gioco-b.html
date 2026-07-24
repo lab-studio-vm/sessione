@@ -769,5 +769,29 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 </script>
+ <script>
+  /* invio dati al questionario */
+  (function () {
+   var COND = location.pathname.indexOf("gioco-b") !== -1 ? "esclusione" : "inclusione";
+   var ric = 0, lanci = [], avevaPalla = false, t0 = null, inviato = false;
+   function vis(el) { return !!el && el.offsetParent !== null; }
+   setInterval(function () {
+    var p = document.getElementById("throw-prompt");
+    var ora = vis(p);
+    if (ora && !avevaPalla) { ric = ric + 1; t0 = Date.now(); }
+    if (!ora && avevaPalla && t0) { lanci.push({ n: ric, rt: Date.now() - t0 }); t0 = null; }
+    avevaPalla = ora;
+    var fine = document.getElementById("end-screen");
+    if (!inviato && vis(fine)) {
+     inviato = true;
+     var el = document.getElementById("nickname-input");
+     try {
+      parent.postMessage({ source: "cyberball", condizione: COND, nickname: el ? el.value : "", ricezioni: ric, lanci: lanci }, "*");
+     } catch (e) {}
+    }
+   }, 200);
+  })();
+  
+ </script>
 </body>
 </html>
