@@ -781,5 +781,29 @@ document.addEventListener('DOMContentLoaded', () => {
   })();
   
  </script>
+<script>
+/* --- controllo WebGL: messaggio chiaro se la grafica 3D non e disponibile --- */
+(function () {
+  function webglOk() {
+    try {
+      var c = document.createElement("canvas");
+      return !!(window.WebGLRenderingContext && (c.getContext("webgl") || c.getContext("experimental-webgl")));
+    } catch (e) { return false; }
+  }
+  if (webglOk()) { return; }
+  function mostra() {
+    var d = document.createElement("div");
+    d.setAttribute("style", "position:fixed;inset:0;z-index:99999;background:#fff;color:#111827;display:flex;align-items:center;justify-content:center;padding:32px;font-family:Helvetica,Arial,sans-serif;");
+    d.innerHTML = '<div style="max-width:520px">' +
+      '<h1 style="font-size:22px;margin:0 0 14px">Questo dispositivo non puo mostrare il gioco</h1>' +
+      '<p style="line-height:1.6;margin:0 0 12px">Il gioco richiede la grafica 3D del browser (WebGL), che in questo momento non risulta disponibile.</p>' +
+      '<p style="line-height:1.6;margin:0 0 12px"><strong>Come risolvere:</strong> nelle impostazioni di Chrome apri <em>Sistema</em> e attiva <em>Usa accelerazione hardware quando disponibile</em>, poi riavvia il browser. In alternativa prova con un altro dispositivo o un altro browser.</p>' +
+      '<p style="line-height:1.6;margin:0">Se il problema resta, contatta chi conduce lo studio.</p>' +
+      '</div>';
+    document.body.appendChild(d);
+  }
+  if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", mostra); } else { mostra(); }
+})();
+</script>
 </body>
 </html>
