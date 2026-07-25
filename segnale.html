@@ -983,7 +983,12 @@ if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){
     if (pid) {
       var inp = document.getElementById("pid");
       var btn = document.getElementById("setupBtn");
-      if (inp && btn) { inp.value = pid; btn.click(); }
+      if (inp && btn) {
+        inp.value = pid;
+        inp.dispatchEvent(new Event("input", { bubbles: true }));
+        inp.dispatchEvent(new Event("change", { bubbles: true }));
+        btn.click();
+      }
     }
     document.addEventListener("click", function (e) {
       var t = e.target;
@@ -997,7 +1002,7 @@ if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){
     }, true);
     setInterval(function () {
       var fine = document.getElementById("completeScreen");
-      if (!inviato && fine && fine.offsetParent !== null) {
+      if (!inviato && fine && fine.classList.contains("active")) {
         inviato = true;
         var sid = document.getElementById("sessId");
         try {
