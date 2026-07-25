@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Sistema di Allarme</title>
+<style>
+/* ============================================================
+   WARNING SYSTEM — Experimental Audio Interface
+   Misura comportamentale post-Cyberball (invio singolo).
+   I valori in dB sono SIMBOLICI: il volume reale è limitato
+   via software (vedi AudioManager, MAX_GAIN).
+   ============================================================ */
+
+:root{
+  --bg:#050505;
+  --panel:#090909;
+  --red:#ff1f1f;
+  --red-bright:#ff0000;
+  --red-dark:#5b0b0b;
+  --red-dim:#b32929;
+  --border:#ff2525;
+  --glow:0 0 18px rgba(255,31,31,.45), 0 0 55px rgba(255,0,0,.18);
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+
+html,body{
+  width:100vw;height:100vh;min-height:100vh;
+  overflow:hidden;
+  background:var(--bg);
+  color:var(--red);
+  font-family:"Courier New",Courier,monospace;
+  text-transform:uppercase;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---- scanline / flicker overlay -------------------------- */
+body::after{
+  content:"";
+  position:fixed;inset:0;
+  pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(255,0,0,.022) 0 1px,transparent 1px 3px);
+  z-index:9000;
+}
+@keyframes flicker{
+  0%,100%{opacity:1}
+  96%{opacity:1}
+  97%{opacity:.96}
+  98%{opacity:1}
+  99%{opacity:.97}
+}
+.screen{animation:flicker 7s infinite;}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none !important;transition:none !important;}
+}
+body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
+  animation:none !important;transition:none !important;
+}
+
+/* ---- generic screen layout -------------------------------- */
+.screen{
+  position:fixed;inset:0;
+  width:100vw;height:100vh;
+  display:none;
+  align-items:center;justify-content:center;
+  padding:clamp(8px,2vmin,24px);
+}
+.screen.active{display:flex;}
+
+.panel{
+  width:100%;height:100%;
+  background:var(--panel);
+  border:2px solid var(--border);
+  border-radius:3px;
+  box-shadow:var(--glow), inset 0 0 60px rgba(255,0,0,.05);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:clamp(16px,4vmin,60px);
+  position:relative;
+  overflow:hidden;
+}
+
+h1.title{
+  font-size:clamp(2rem,7vmin,4.5rem);
+  letter-spacing:clamp(4px,1.5vmin,18px);
+  text-align:center;
+  line-height:1.15;
+  text-shadow:0 0 12px rgba(255,31,31,.6);
+  font-weight:bold;
+}
+.subtitle{
+  margin-top:clamp(8px,1.5vmin,16px);
+  color:var(--red-dim);
+  font-size:clamp(.7rem,1.6vmin,1rem);
+  letter-spacing:clamp(2px,.6vmin,6px);
+  text-align:center;
+}
+.hline{
+  width:clamp(120px,22vmin,260px);
+  height:2px;background:var(--red);
+  margin:clamp(12px,2.5vmin,26px) auto;
+  box-shadow:0 0 8px var(--red);
+}
+
+/* ---- buttons ---------------------------------------------- */
+.btn{
+  font-family:inherit;text-transform:uppercase;
+  background:var(--red-bright);
+  color:#0a0000;
+  border:2px solid var(--border);
+  font-size:clamp(1rem,2.6vmin,1.6rem);
+  font-weight:bold;
+  letter-spacing:clamp(2px,.8vmin,8px);
+  padding:clamp(14px,2.4vmin,22px) clamp(20px,4vmin,40px);
+  cursor:pointer;
+  width:100%;
+  box-shadow:0 0 22px rgba(255,0,0,.55);
+  transition:filter .15s, transform .08s;
+}
+.btn:hover:not(:disabled){filter:brightness(1.15);}
+.btn:active:not(:disabled){transform:scale(.985);}
+.btn:disabled{
+  background:var(--red-dark);color:#3a0505;
+  border-color:var(--red-dark);
+  box-shadow:none;cursor:not-allowed;
+}
+.btn:focus-visible,input:focus-visible,button:focus-visible{
+  outline:2px dashed var(--red);outline-offset:4px;
+}
+.btn.dark{
+  background:#2a0404;color:var(--red);
+  border:2px solid var(--red-bright);
+  box-shadow:0 0 26px rgba(255,0,0,.5), inset 0 0 18px rgba(255,0,0,.15);
+  text-shadow:0 0 8px rgba(255,31,31,.8);
+}
+.btn.dark:disabled{color:#4a0e0e;border-color:var(--red-dark);text-shadow:none;box-shadow:none;}
+
+/* ---- top-right controls ------------------------------------ */
+.sys-controls{
+  position:fixed;top:clamp(10px,2vmin,20px);right:clamp(10px,2vmin,20px);
+  display:flex;gap:10px;z-index:9500;
+}
+.sys-btn{
+  background:transparent;color:var(--red-dim);
+  border:1px solid var(--red-dark);
+  font-family:inherit;text-transform:uppercase;
+  font-size:clamp(.55rem,1.2vmin,.75rem);
+  letter-spacing:1px;
+  padding:6px 10px;cursor:pointer;
+}
+.sys-btn:hover{color:var(--red);border-color:var(--red);}
+.sys-btn.on{color:var(--red);border-color:var(--red);box-shadow:0 0 8px rgba(255,31,31,.4);}
+
+/* ---- setup / consent screens ------------------------------- */
+.narrow{max-width:min(760px,94vw);width:100%;display:flex;flex-direction:column;align-items:center;}
+.consent-text{
+  text-transform:none;
+  color:var(--red-dim);
+  font-size:clamp(.8rem,1.9vmin,1.05rem);
+  line-height:1.6;text-align:center;
+  margin:clamp(10px,2vmin,20px) 0;
+  max-width:60ch;
+}
+.consent-check{
+  display:flex;align-items:flex-start;gap:12px;
+  margin:clamp(12px,2.5vmin,26px) 0;
+  cursor:pointer;text-transform:none;
+  color:var(--red);font-size:clamp(.8rem,1.9vmin,1rem);
+  max-width:60ch;text-align:left;
+}
+.consent-check input{
+  width:22px;height:22px;accent-color:var(--red-bright);
+  flex-shrink:0;margin-top:2px;cursor:pointer;
+}
+.field-label{
+  color:var(--red-dim);letter-spacing:3px;
+  font-size:clamp(.7rem,1.6vmin,.9rem);
+  margin-bottom:10px;
+}
+input.text-input{
+  background:#000;color:var(--red);
+  border:1px solid var(--border);
+  font-family:inherit;font-size:clamp(1.1rem,3vmin,1.7rem);
+  letter-spacing:4px;text-transform:uppercase;
+  padding:12px 16px;text-align:center;
+  width:min(360px,80vw);
+  box-shadow:inset 0 0 12px rgba(255,0,0,.15);
+  margin-bottom:clamp(16px,3vmin,30px);
+}
+
+/* ---- connection screen -------------------------------------- */
+.conn-log{
+  font-size:clamp(.75rem,1.8vmin,1rem);
+  color:var(--red-dim);letter-spacing:2px;
+  min-height:9em;text-align:left;
+  width:min(520px,86vw);
+  line-height:1.9;
+}
+.conn-log .ok{color:var(--red);}
+@keyframes blinkDot{0%,49%{opacity:1}50%,100%{opacity:.15}}
+.blink{animation:blinkDot 1s infinite;}
+
+/* ---- main experiment panel ---------------------------------- */
+.main-panel{justify-content:space-between;}
+@keyframes borderPulse{
+  0%,100%{box-shadow:var(--glow), inset 0 0 60px rgba(255,0,0,.05);}
+  50%{box-shadow:0 0 34px rgba(255,0,0,.85),0 0 90px rgba(255,0,0,.35), inset 0 0 70px rgba(255,0,0,.12);}
+}
+.panel.alarm{animation:borderPulse .55s ease-in-out infinite;}
+
+.main-header{text-align:center;flex-shrink:0;}
+.main-header h1{font-size:clamp(1.6rem,5.5vmin,3.6rem);}
+
+.conn-indicator{
+  display:flex;align-items:center;gap:10px;justify-content:center;
+  color:var(--red-dim);
+  font-size:clamp(.6rem,1.4vmin,.85rem);letter-spacing:3px;
+  margin-top:clamp(6px,1.2vmin,12px);
+}
+.dot{
+  width:9px;height:9px;background:var(--red-bright);
+  border-radius:50%;box-shadow:0 0 8px var(--red-bright);
+  animation:blinkDot 1.2s infinite;
+}
+
+.vol-block{width:min(900px,92%);flex-shrink:0;}
+.vol-row{
+  display:flex;justify-content:space-between;align-items:flex-end;
+  margin-bottom:clamp(8px,1.6vmin,16px);
+}
+.vol-label{
+  font-size:clamp(.8rem,2vmin,1.25rem);
+  letter-spacing:clamp(2px,.6vmin,5px);
+  padding-bottom:clamp(6px,1.4vmin,14px);
+}
+#volValue{
+  font-size:clamp(2.6rem,8vmin,5.2rem);
+  font-weight:bold;line-height:1;
+  text-shadow:0 0 16px rgba(255,31,31,.75);
+  min-width:2.2ch;text-align:right;
+}
+@keyframes numPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+#volValue.pulse{animation:numPulse .5s ease-in-out infinite;}
+
+/* slider */
+.slider-wrap{position:relative;width:100%;}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;
+  width:100%;height:8px;
+  background:linear-gradient(to right,var(--red-bright) 0%,var(--red-bright) var(--fill,50%),#2a0505 var(--fill,50%),#2a0505 100%);
+  border:1px solid var(--red-dark);
+  outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:clamp(26px,4.5vmin,34px);height:clamp(26px,4.5vmin,34px);
+  background:var(--red-bright);
+  border:2px solid #ff6b6b;border-radius:2px;
+  box-shadow:0 0 16px var(--red-bright);
+  cursor:grab;
+}
+input[type=range]::-moz-range-thumb{
+  width:clamp(26px,4.5vmin,34px);height:clamp(26px,4.5vmin,34px);
+  background:var(--red-bright);
+  border:2px solid #ff6b6b;border-radius:2px;
+  box-shadow:0 0 16px var(--red-bright);
+  cursor:grab;
+}
+input[type=range]:disabled{opacity:.45;cursor:not-allowed;}
+.ticks{
+  display:flex;justify-content:space-between;
+  margin-top:6px;
+  color:var(--red-dark);
+  font-size:clamp(.5rem,1.1vmin,.7rem);letter-spacing:1px;
+}
+.slider-legend{
+  display:flex;justify-content:space-between;
+  margin-top:clamp(6px,1.2vmin,12px);
+  color:var(--red-dim);
+  font-size:clamp(.6rem,1.4vmin,.85rem);letter-spacing:3px;
+}
+.classification{
+  text-align:center;
+  margin-top:clamp(8px,1.8vmin,18px);
+  font-size:clamp(.9rem,2.4vmin,1.5rem);
+  letter-spacing:clamp(3px,1vmin,10px);
+  color:var(--red);
+  text-shadow:0 0 10px rgba(255,31,31,.6);
+  min-height:1.4em;
+}
+
+/* sound waves animation */
+.waves{
+  display:flex;gap:5px;justify-content:center;align-items:flex-end;
+  height:26px;margin-top:8px;visibility:hidden;
+}
+.waves span{
+  width:5px;background:var(--red);box-shadow:0 0 6px var(--red);
+  height:6px;
+}
+@keyframes waveUp{0%,100%{height:5px}50%{height:24px}}
+.waves.on{visibility:visible;}
+.waves.on span{animation:waveUp .45s ease-in-out infinite;}
+.waves.on span:nth-child(2){animation-delay:.08s}
+.waves.on span:nth-child(3){animation-delay:.16s}
+.waves.on span:nth-child(4){animation-delay:.24s}
+.waves.on span:nth-child(5){animation-delay:.32s}
+
+/* buttons zone */
+.btn-zone{width:min(900px,92%);display:flex;flex-direction:column;gap:clamp(10px,2vmin,20px);flex-shrink:0;}
+.sim-note{
+  text-align:center;color:var(--red-dark);
+  font-size:clamp(.55rem,1.2vmin,.72rem);letter-spacing:3px;
+}
+.tx-bar-wrap{
+  width:100%;height:10px;border:1px solid var(--red-dark);
+  background:#150202;display:none;
+}
+.tx-bar{height:100%;width:0%;background:var(--red-bright);box-shadow:0 0 10px var(--red-bright);}
+.tx-msg{
+  text-align:center;font-size:clamp(.8rem,2vmin,1.2rem);
+  letter-spacing:4px;min-height:1.5em;color:var(--red);
+  text-shadow:0 0 10px rgba(255,31,31,.6);
+}
+
+/* status bar */
+.status-bar{
+  width:100%;flex-shrink:0;
+  border-top:1px solid var(--red-dark);
+  padding-top:clamp(8px,1.4vmin,14px);
+  display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 18px;
+  color:var(--red-dim);
+  font-size:clamp(.52rem,1.15vmin,.72rem);letter-spacing:2px;
+}
+
+/* ---- complete screen ---------------------------------------- */
+.disclaimer{
+  text-transform:none;color:var(--red-dim);
+  font-size:clamp(.7rem,1.6vmin,.95rem);
+  line-height:1.7;text-align:center;max-width:70ch;
+  margin-top:clamp(14px,3vmin,28px);
+}
+
+/* ---- admin (experimenter) screen ----------------------------- */
+#adminScreen .panel{justify-content:flex-start;overflow-y:auto;}
+.admin-table-wrap{width:100%;overflow:auto;margin:16px 0;max-height:45vh;}
+table.admin{
+  width:100%;border-collapse:collapse;
+  font-size:clamp(.55rem,1.3vmin,.8rem);
+}
+table.admin th,table.admin td{
+  border:1px solid var(--red-dark);
+  padding:6px 8px;text-align:center;color:var(--red-dim);
+  white-space:nowrap;
+}
+table.admin th{color:var(--red);background:#150202;letter-spacing:1px;}
+.admin-btns{display:flex;flex-wrap:wrap;gap:12px;width:100%;justify-content:center;}
+.admin-btns .btn{width:auto;flex:1;min-width:200px;font-size:clamp(.8rem,1.8vmin,1.1rem);padding:14px 18px;}
+.admin-stats{
+  display:flex;flex-wrap:wrap;gap:8px 26px;justify-content:center;
+  color:var(--red-dim);font-size:clamp(.65rem,1.5vmin,.9rem);
+  letter-spacing:2px;margin-top:8px;
+}
+.admin-stats b{color:var(--red);}
+
+/* incoming flash (riservato ad usi futuri / feedback visivo) */
+@keyframes redFlash{0%{opacity:.55}100%{opacity:0}}
+#flash{
+  position:fixed;inset:0;background:var(--red-bright);
+  opacity:0;pointer-events:none;z-index:8000;
+}
+#flash.go{animation:redFlash .4s ease-out forwards;}
+
+/* mobile */
+@media (max-width:640px){
+  .panel{padding:18px 12px;}
+  .vol-row{flex-direction:column;align-items:center;gap:4px;}
+  #volValue{text-align:center;}
+  .status-bar{justify-content:center;}
+}
+</style>
+</head>
+<body>
+
+<!-- top-right persistent controls -->
+<div class="sys-controls">
+  <button id="muteBtn" class="sys-btn" aria-label="Disattiva audio" aria-pressed="false">DISATTIVA AUDIO</button>
+  <button id="fsBtn" class="sys-btn" aria-label="Schermo intero">SCHERMO INTERO</button>
+</div>
+
+<div id="flash" aria-hidden="true"></div>
+
+<!-- ========== 0. EXPERIMENTER SETUP ========== -->
+<section id="setupScreen" class="screen active" aria-label="Experimenter setup">
+  <div class="panel">
+    <div class="narrow">
+      <h1 class="title">SISTEMA DI ALLARME</h1>
+      <p class="subtitle">SETUP SPERIMENTATORE</p>
+      <div class="hline"></div>
+      <label class="field-label" for="pid">CODICE PARTECIPANTE</label>
+      <input id="pid" class="text-input" type="text" autocomplete="off" maxlength="20" aria-label="Codice partecipante">
+      <button id="setupBtn" class="btn" disabled>AVVIA SESSIONE</button>
+      <p class="subtitle" style="margin-top:22px;text-transform:none;">Inserire il codice soggetto e consegnare il dispositivo al partecipante.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 2. INITIALIZING ========== -->
+<section id="initScreen" class="screen" aria-label="System initializing">
+  <div class="panel">
+    <h1 class="title" style="font-size:clamp(1.3rem,4vmin,2.4rem);">INIZIALIZZAZIONE SISTEMA<span class="blink">…</span></h1>
+  </div>
+</section>
+
+<!-- ========== 3. CONNECTING TO PLAYERS ========== -->
+<section id="connectScreen" class="screen" aria-label="Connecting">
+  <div class="panel">
+    <div class="narrow">
+      <h1 class="title" style="font-size:clamp(1.2rem,3.6vmin,2.2rem);">CONNESSIONE AI GIOCATORI<span class="blink">…</span></h1>
+      <div class="hline"></div>
+      <div id="connLog" class="conn-log" aria-live="polite"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 4. MAIN WARNING PANEL ========== -->
+<section id="mainScreen" class="screen" aria-label="Warning system main panel">
+  <div class="panel main-panel" id="mainPanel">
+
+    <div class="main-header">
+      <h1 class="title">SISTEMA DI<br>ALLARME</h1>
+      <div class="hline" style="margin-bottom:0;"></div>
+      <div class="conn-indicator"><span class="dot" aria-hidden="true"></span> CONNESSIONE REMOTA STABILITA</div>
+    </div>
+
+    <div class="vol-block">
+      <div class="vol-row">
+        <div class="vol-label">VOLUME SEGNALE (DB):</div>
+        <div id="volValue" aria-live="polite">70</div>
+      </div>
+      <div class="slider-wrap">
+        <input type="range" id="volSlider" min="0" max="140" step="1" value="70"
+               aria-label="Volume del segnale da 0 a 140"
+               aria-valuemin="0" aria-valuemax="140" aria-valuenow="70">
+        <div class="ticks">
+          <span>0</span><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span><span>120</span><span>140</span>
+        </div>
+        <div class="slider-legend">
+          <span>SILENZIO</span><span>70 DB</span><span>MASSIMO</span>
+        </div>
+      </div>
+      <div id="classLabel" class="classification">ALTO</div>
+      <div id="waves" class="waves" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+    </div>
+
+    <div class="btn-zone">
+      <button id="tryBtn" class="btn" aria-label="Prova segnale: ascolta un'anteprima del segnale">PROVA SEGNALE</button>
+      <button id="sendBtn" class="btn dark" aria-label="Invia segnale: invia il segnale ai giocatori">INVIA SEGNALE</button>
+      <div class="tx-bar-wrap" id="txBarWrap"><div class="tx-bar" id="txBar"></div></div>
+      <div class="tx-msg" id="txMsg" aria-live="assertive"></div>
+    </div>
+
+    <div class="status-bar">
+      <span>STATO: CONNESSO</span>
+      <span>ID SESSIONE: <span id="sessId">----</span></span>
+      <span>CANALE AUDIO: APERTO</span>
+      <span>riccardo_s: CONNESSO</span>
+      <span>federica.99: CONNESSA</span>
+      <span>LINEA SICURA: ATTIVA</span>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 5. COMPLETE ========== -->
+<section id="completeScreen" class="screen" aria-label="Experiment complete">
+  <div class="panel">
+    <div class="narrow">
+      <h1 class="title" style="font-size:clamp(1.6rem,5vmin,3.2rem);">ESPERIMENTO COMPLETATO</h1>
+      <div class="hline"></div>
+      <p class="subtitle">SEGNALE CONSEGNATO — SESSIONE CHIUSA</p>
+      <p class="subtitle" style="margin-top:26px;">ATTENDI LO SPERIMENTATORE</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 6. ADMIN / EXPERIMENTER (Ctrl+Shift+X) ========== -->
+<section id="adminScreen" class="screen" aria-label="Experimenter data panel">
+  <div class="panel">
+    <h1 class="title" style="font-size:clamp(1.2rem,3.6vmin,2.2rem);">PANNELLO SPERIMENTATORE</h1>
+    <div class="hline"></div>
+    <div class="admin-stats" id="adminStats"></div>
+    <div class="admin-table-wrap">
+      <table class="admin" id="adminTable"></table>
+    </div>
+    <div class="admin-btns">
+      <button id="csvBtn" class="btn">SCARICA CSV</button>
+      <button id="restartBtn" class="btn dark">RIAVVIA ESPERIMENTO</button>
+      <button id="closeAdminBtn" class="btn dark">TORNA AL SISTEMA</button>
+      <button id="clearBtn" class="btn dark">ELIMINA TUTTI I DATI</button>
+    </div>
+    <p class="subtitle" style="margin-top:18px;text-transform:none;">
+      Pannello riservato allo sperimentatore (Ctrl+Shift+X per aprire/chiudere).
+    </p>
+  </div>
+</section>
+
+<script>
+"use strict";
+/* ============================================================
+   WARNING SYSTEM — logic
+   Flusso: setup (ID) → consent → init → connecting → main
+           → send (unica misura) → complete.
+   Pannello sperimentatore: Ctrl+Shift+X.
+   ============================================================ */
+
+/* ---------------- AudioManager ------------------------------
+   Sirena generata con Web Audio API (nessun file esterno).
+   SICUREZZA: il gain reale è SEMPRE limitato a MAX_GAIN,
+   indipendentemente dal valore simbolico (0–140) selezionato.
+   Il numero mostrato NON corrisponde ai dB reali.             */
+const AudioManager = {
+  ctx: null,
+  muted: false,
+  playing: false,
+  nodes: null,             // { carrier, lfo, lfoGain, filter, gain }
+  MAX_GAIN: 0.85,          // volume reale massimo (il numero in dB resta simbolico)
+  MIN_GAIN: 0.06,          // udibilità minima per valori > 0
+
+  init(){
+    if(this.ctx) return;
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC();
+    }catch(e){
+      console.warn("Web Audio API non disponibile:", e);
+    }
+  },
+  async resume(){
+    if(this.ctx && this.ctx.state === "suspended"){
+      try{ await this.ctx.resume(); }catch(e){}
+    }
+  },
+  gainFor(symbolicValue){
+    const norm = Math.min(1, Math.max(0, symbolicValue / 140));
+    return this.MIN_GAIN + norm * (this.MAX_GAIN - this.MIN_GAIN);
+  },
+  /* Sirena CONTINUA: parte con startSiren e suona finché non
+     viene chiamato stopSiren. Sweep 650↔950 Hz via LFO. */
+  startSiren(symbolicValue){
+    if(this.muted || !this.ctx || symbolicValue <= 0 || this.playing) return false;
+    this.resume();
+
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    const carrier = ctx.createOscillator();
+    carrier.type = "sawtooth";
+    carrier.frequency.value = 800;          // frequenza centrale
+
+    // LFO che fa oscillare la frequenza tra ~650 e ~950 Hz
+    const lfo = ctx.createOscillator();
+    lfo.type = "sine";
+    lfo.frequency.value = 3;                // 3 cicli di sirena al secondo
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 150;               // profondità dello sweep
+    lfo.connect(lfoGain);
+    lfoGain.connect(carrier.frequency);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 2600;
+    filter.Q.value = 0.8;
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(this.gainFor(symbolicValue), now + 0.03); // fade-in anti-click
+
+    carrier.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+    carrier.start(now); lfo.start(now);
+
+    this.nodes = { carrier, lfo, gain };
+    this.playing = true;
+    return true;
+  },
+  /* Aggiorna il volume in tempo reale se lo slider si muove durante la sirena */
+  setLevel(symbolicValue){
+    if(this.playing && this.nodes){
+      const t = this.ctx.currentTime;
+      this.nodes.gain.gain.cancelScheduledValues(t);
+      this.nodes.gain.gain.linearRampToValueAtTime(
+        symbolicValue > 0 ? this.gainFor(symbolicValue) : 0.0001, t + 0.05);
+    }
+  },
+  stopSiren(){
+    if(!this.playing || !this.nodes) { this.playing = false; return; }
+    const { carrier, lfo, gain } = this.nodes;
+    const t = this.ctx.currentTime;
+    try{
+      gain.gain.cancelScheduledValues(t);
+      gain.gain.setValueAtTime(gain.gain.value, t);
+      gain.gain.linearRampToValueAtTime(0.0001, t + 0.05);  // fade-out anti-click
+      carrier.stop(t + 0.07); lfo.stop(t + 0.07);
+    }catch(e){}
+    this.nodes = null;
+    this.playing = false;
+  },
+  stopAll(){ this.stopSiren(); },
+  setMuted(m){
+    this.muted = m;
+    if(m) this.stopSiren();
+  }
+};
+
+/* ---------------- State & data ------------------------------ */
+const LS_KEY = "warning_system_sessions_v1";
+const state = {
+  participantId: "",
+  sessionId: "",
+  previewCount: 0,
+  previewValues: [],
+  previewStartedAt: null,
+  previewTotalMs: 0,
+  maxSliderValue: 70,
+  minSliderValue: 70,
+  mainShownAt: null,
+  sent: false,
+  prevScreen: "setupScreen"
+};
+
+/* ---------------- Invio remoto dei dati ----------------------
+   Configurazione Google Form (opzionale ma consigliata per il
+   sito pubblico): crea un Google Form con campi corrispondenti,
+   poi incolla qui l'URL formResponse e gli entry ID.
+   Se FORM_ACTION è vuoto, l'invio remoto viene saltato e i dati
+   restano solo in localStorage.                                 */
+const REMOTE = {
+  FORM_ACTION: "https://docs.google.com/forms/d/e/1FAIpQLScgxxzIPg-KV3T7FJ2OHkMvlGImTYr0uA1SVVmLMJIDRYD1xQ/formResponse",
+  ENTRIES: {
+    participant_id:  "entry.294990756",
+    selected_value:  "entry.1397101142",
+    classification:  "entry.680255923",
+    preview_count:   "entry.1104582329",
+    preview_total_ms:"entry.837093650",
+    time_to_send_ms: "entry.384306018",
+    session_id:      "entry.1760979380"
+  }
+};
+function sendToRemote(rec){
+  if(!REMOTE.FORM_ACTION) return;
+  const data = new FormData();
+  Object.entries(REMOTE.ENTRIES).forEach(([k, entry])=>{
+    data.append(entry, rec[k]);
+  });
+  // no-cors: il browser invia senza leggere la risposta (normale per i Form)
+  fetch(REMOTE.FORM_ACTION, { method:"POST", mode:"no-cors", body:data })
+    .catch(()=>{ /* offline: i dati restano comunque in localStorage */ });
+}
+
+function loadSessions(){
+  try{ return JSON.parse(localStorage.getItem(LS_KEY)) || []; }
+  catch(e){ return []; }
+}
+function saveSession(rec){
+  const all = loadSessions();
+  all.push(rec);
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(all)); }catch(e){}
+}
+
+function classify(v){
+  if(v===0) return "NESSUN SEGNALE";
+  if(v<=30) return "BASSO";
+  if(v<=60) return "MODERATO";
+  if(v<=90) return "ALTO";
+  if(v<=120) return "SEVERO";
+  return "MASSIMO";
+}
+function randSessionId(){
+  const c = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";
+  let s = "";
+  for(let i=0;i<6;i++) s += c[Math.floor(Math.random()*c.length)];
+  return "SX-" + s;
+}
+
+/* ---------------- Screen router ------------------------------ */
+const screens = ["setupScreen","initScreen","connectScreen","mainScreen","completeScreen","adminScreen"];
+function show(id){
+  screens.forEach(s=>document.getElementById(s).classList.toggle("active", s===id));
+  if(id !== "adminScreen") state.prevScreen = id;
+  if(id === "mainScreen" && state.mainShownAt === null){
+    state.mainShownAt = performance.now();
+  }
+}
+
+/* ---------------- DOM refs ----------------------------------- */
+const $ = id => document.getElementById(id);
+const pid = $("pid"), setupBtn = $("setupBtn");
+const connLog = $("connLog");
+const volSlider = $("volSlider"), volValue = $("volValue"), classLabel = $("classLabel");
+const tryBtn = $("tryBtn"), sendBtn = $("sendBtn");
+const txBarWrap = $("txBarWrap"), txBar = $("txBar"), txMsg = $("txMsg");
+const waves = $("waves"), mainPanel = $("mainPanel");
+
+/* ---------------- 0. Setup ----------------------------------- */
+pid.addEventListener("input", ()=>{ setupBtn.disabled = pid.value.trim() === ""; });
+setupBtn.addEventListener("click", ()=>{
+  state.participantId = pid.value.trim().toUpperCase();
+  state.sessionId = randSessionId();
+  $("sessId").textContent = state.sessionId;
+  AudioManager.init();       // AudioContext creato dal gesto dello sperimentatore
+  AudioManager.resume();
+  show("initScreen");
+  setTimeout(()=>{ show("connectScreen"); runConnection(); }, 1500);
+});
+pid.addEventListener("keydown", e=>{ if(e.key==="Enter" && !setupBtn.disabled) setupBtn.click(); });
+
+/* ---------------- 3. Connection simulation ------------------- */
+function runConnection(){
+  connLog.innerHTML = "";
+  const lines = [
+    "> ATTIVAZIONE LINEA SICURA ...",
+    "> PROTOCOLLO DI CONNESSIONE: OK",
+    "> RICERCA GIOCATORI DELLA SESSIONE PRECEDENTE ...",
+    "> riccardo_s ............ <span class='ok'>CONNESSO</span>",
+    "> federica.99 ........... <span class='ok'>CONNESSA</span>",
+    "> CANALE AUDIO: <span class='ok'>APERTO</span>",
+    "> <span class='ok'>TUTTI I GIOCATORI CONNESSI</span>"
+  ];
+  const total = 1500 + Math.random()*1500;   // 1.5–3 s
+  const step = total / lines.length;
+  lines.forEach((l,i)=>{
+    setTimeout(()=>{
+      const div = document.createElement("div");
+      div.innerHTML = l;
+      connLog.appendChild(div);
+      if(i === lines.length-1){
+        setTimeout(()=> show("mainScreen"), 700);
+      }
+    }, step*(i+1));
+  });
+}
+
+/* ---------------- 4. Slider ---------------------------------- */
+function updateSlider(){
+  const v = parseInt(volSlider.value, 10);
+  volValue.textContent = v;
+  volSlider.setAttribute("aria-valuenow", v);
+  volSlider.style.setProperty("--fill", (v/140*100) + "%");
+  classLabel.textContent = classify(v);
+  state.maxSliderValue = Math.max(state.maxSliderValue, v);
+  state.minSliderValue = Math.min(state.minSliderValue, v);
+  AudioManager.setLevel(v);   // aggiorna il volume se la sirena sta suonando
+}
+volSlider.addEventListener("input", updateSlider);
+updateSlider();
+
+/* ---------------- TRY WARNING (anteprima continua) -----------
+   Primo click: la sirena parte e suona in continuo.
+   Secondo click (STOP WARNING): la sirena si ferma.            */
+function stopPreview(){
+  AudioManager.stopSiren();
+  if(state.previewStartedAt !== null){
+    state.previewTotalMs += Math.round(performance.now() - state.previewStartedAt);
+    state.previewStartedAt = null;
+  }
+  tryBtn.textContent = "PROVA SEGNALE";
+  mainPanel.classList.remove("alarm");
+  volValue.classList.remove("pulse");
+  waves.classList.remove("on");
+}
+
+tryBtn.addEventListener("click", ()=>{
+  if(state.sent) return;
+
+  // se sta suonando → stop
+  if(AudioManager.playing){
+    stopPreview();
+    return;
+  }
+
+  const v = parseInt(volSlider.value, 10);
+  state.previewCount++;
+  state.previewValues.push(v);
+
+  if(v === 0){
+    txMsg.textContent = "SEGNALE SILENZIOSO SELEZIONATO";
+    tryBtn.disabled = true;
+    setTimeout(()=>{
+      txMsg.textContent = "";
+      tryBtn.disabled = state.sent;
+    }, 1000);
+    return;
+  }
+
+  const started = AudioManager.startSiren(v);
+  if(started){
+    state.previewStartedAt = performance.now();
+    tryBtn.textContent = "FERMA SEGNALE";
+    mainPanel.classList.add("alarm");
+    volValue.classList.add("pulse");
+    waves.classList.add("on");
+  }
+});
+
+/* ---------------- SEND WARNING (misura sperimentale) --------- */
+sendBtn.addEventListener("click", ()=>{
+  if(state.sent) return;
+  state.sent = true;
+
+  const v = parseInt(volSlider.value, 10);
+  const timeToSend = Math.round(performance.now() - state.mainShownAt);
+
+  // blocca interfaccia e ferma l'eventuale anteprima in corso
+  stopPreview();
+  volSlider.disabled = true;
+  tryBtn.disabled = true;
+  sendBtn.disabled = true;
+
+  // trasmissione simulata (~1 s) — nessun dato o suono inviato realmente
+  txMsg.textContent = "TRASMISSIONE SEGNALE…";
+  txBarWrap.style.display = "block";
+  txBar.style.transition = "width 1s linear";
+  requestAnimationFrame(()=>{ txBar.style.width = "100%"; });
+
+  setTimeout(()=>{
+    txMsg.textContent = "SEGNALE CONSEGNATO";
+    $("flash").classList.add("go");
+    setTimeout(()=> $("flash").classList.remove("go"), 450);
+
+    // registra la sessione (localStorage + eventuale invio remoto)
+    const rec = {
+      session_id: state.sessionId,
+      participant_id: state.participantId,
+      selected_value: v,
+      classification: classify(v),
+      preview_count: state.previewCount,
+      preview_values: state.previewValues.join("|"),
+      preview_total_ms: state.previewTotalMs,
+      max_slider_value: state.maxSliderValue,
+      min_slider_value: state.minSliderValue,
+      time_to_send_ms: timeToSend,
+      timestamp: new Date().toISOString()
+    };
+    saveSession(rec);
+    sendToRemote(rec);
+
+    setTimeout(()=> show("completeScreen"), 1600);
+  }, 1050);
+});
+
+/* ---------------- Admin panel (Ctrl+Shift+X) ------------------ */
+document.addEventListener("keydown", e=>{
+  if(e.ctrlKey && e.shiftKey && e.code === "KeyX"){
+    e.preventDefault();
+    const admin = $("adminScreen");
+    if(admin.classList.contains("active")){
+      show(state.prevScreen);
+    }else{
+      renderAdmin();
+      screens.forEach(s=>$(s).classList.toggle("active", s==="adminScreen"));
+    }
+  }
+});
+
+const COLS = ["session_id","participant_id","selected_value","classification","preview_count","preview_values","preview_total_ms","max_slider_value","min_slider_value","time_to_send_ms","timestamp"];
+
+function renderAdmin(){
+  const all = loadSessions();
+  const tbl = $("adminTable");
+  tbl.innerHTML = "";
+  const head = tbl.insertRow();
+  COLS.forEach(c=>{
+    const th = document.createElement("th");
+    th.textContent = c.replace(/_/g," ");
+    head.appendChild(th);
+  });
+  all.forEach(r=>{
+    const row = tbl.insertRow();
+    COLS.forEach(c=>{ row.insertCell().textContent = r[c]; });
+  });
+
+  const vals = all.map(r=>r.selected_value);
+  const stats = $("adminStats");
+  if(vals.length){
+    const mean = vals.reduce((a,b)=>a+b,0)/vals.length;
+    const sorted = [...vals].sort((a,b)=>a-b);
+    const median = sorted.length%2 ? sorted[(sorted.length-1)/2]
+                 : (sorted[sorted.length/2-1]+sorted[sorted.length/2])/2;
+    const sd = vals.length>1
+      ? Math.sqrt(vals.reduce((s,x)=>s+(x-mean)**2,0)/(vals.length-1))
+      : 0;
+    stats.innerHTML =
+      `SESSIONI: <b>${vals.length}</b>` +
+      ` MEDIA: <b>${mean.toFixed(1)}</b>` +
+      ` MEDIANA: <b>${median}</b>` +
+      ` DS: <b>${sd.toFixed(1)}</b>` +
+      ` MIN: <b>${Math.min(...vals)}</b>` +
+      ` MAX: <b>${Math.max(...vals)}</b>`;
+  }else{
+    stats.textContent = "NESSUN DATO REGISTRATO";
+  }
+}
+
+/* CSV export */
+$("csvBtn").addEventListener("click", ()=>{
+  const all = loadSessions();
+  const esc = s => `"${String(s ?? "").replace(/"/g,'""')}"`;
+  const rows = [COLS.join(",")];
+  all.forEach(r=> rows.push(COLS.map(c=>esc(r[c])).join(",")));
+  const blob = new Blob([rows.join("\r\n")], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "warning_system_data.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+});
+
+/* restart: nuova sessione (i dati salvati restano) */
+$("restartBtn").addEventListener("click", ()=>{
+  AudioManager.stopAll();
+  Object.assign(state, {
+    participantId:"", sessionId:"", previewCount:0, previewValues:[],
+    previewStartedAt:null, previewTotalMs:0,
+    maxSliderValue:70, minSliderValue:70, mainShownAt:null, sent:false,
+    prevScreen:"setupScreen"
+  });
+  pid.value = ""; setupBtn.disabled = true;
+  volSlider.disabled = false; volSlider.value = 70; updateSlider();
+  tryBtn.disabled = false; tryBtn.textContent = "PROVA SEGNALE";
+  sendBtn.disabled = false;
+  txMsg.textContent = ""; txBarWrap.style.display = "none";
+  txBar.style.transition = "none"; txBar.style.width = "0%";
+  show("setupScreen");
+});
+
+$("closeAdminBtn").addEventListener("click", ()=> show(state.prevScreen));
+
+$("clearBtn").addEventListener("click", ()=>{
+  if(confirm("Eliminare TUTTI i dati salvati su questo dispositivo?")){
+    localStorage.removeItem(LS_KEY);
+    renderAdmin();
+  }
+});
+
+/* ---------------- Mute --------------------------------------- */
+$("muteBtn").addEventListener("click", ()=>{
+  const m = !AudioManager.muted;
+  AudioManager.setMuted(m);
+  $("muteBtn").classList.toggle("on", m);
+  $("muteBtn").textContent = m ? "AUDIO DISATTIVATO" : "DISATTIVA AUDIO";
+  $("muteBtn").setAttribute("aria-pressed", m);
+});
+
+/* ---------------- Fullscreen --------------------------------- */
+$("fsBtn").addEventListener("click", async ()=>{
+  try{
+    if(!document.fullscreenElement){
+      await document.documentElement.requestFullscreen();
+    }else{
+      await document.exitFullscreen();
+    }
+  }catch(e){}
+});
+document.addEventListener("fullscreenchange", ()=>{
+  const on = !!document.fullscreenElement;
+  $("fsBtn").textContent = on ? "ESCI DA SCHERMO INTERO" : "SCHERMO INTERO";
+  $("fsBtn").setAttribute("aria-label", on ? "Esci da schermo intero" : "Schermo intero");
+});
+
+/* ---------------- Reduced motion ------------------------------ */
+if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+  document.body.classList.add("reduce-motion");
+}
+</script>
+<script>
+/* --- avvio automatico + invio dati al questionario (aggiunto) --- */
+(function () {
+  var dbInviati = null, classeInviata = null, inviato = false, pid = "";
+  function avvia() {
+    try { pid = new URLSearchParams(location.search).get("pid") || ""; } catch (e) { pid = ""; }
+    if (pid) {
+      var inp = document.getElementById("pid");
+      var btn = document.getElementById("setupBtn");
+      if (inp && btn) { inp.value = pid; btn.click(); }
+    }
+    document.addEventListener("click", function (e) {
+      var t = e.target;
+      var isSend = t && (t.id === "sendBtn" || (t.closest && t.closest("#sendBtn")));
+      if (isSend) {
+        var vol = document.getElementById("volSlider");
+        var cls = document.getElementById("classLabel");
+        if (vol) dbInviati = vol.value;
+        if (cls) classeInviata = (cls.textContent || "").trim();
+      }
+    }, true);
+    setInterval(function () {
+      var fine = document.getElementById("completeScreen");
+      if (!inviato && fine && fine.offsetParent !== null) {
+        inviato = true;
+        var sid = document.getElementById("sessId");
+        try {
+          parent.postMessage({
+            source: "allarme",
+            pid: pid,
+            db: dbInviati,
+            classe: classeInviata,
+            sessione: sid ? (sid.textContent || "").trim() : ""
+          }, "*");
+        } catch (e) {}
+      }
+    }, 200);
+  }
+  if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", avvia); } else { avvia(); }
+})();
+</script>
+</body>
+</html>
