@@ -189,3 +189,22 @@ setTimeout(function () { attesa = false; passa(); }, 60);
 if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", avvia); } else { avvia(); }
 })();
 </script>
+
+<script>
+/* --- testo finale: il partecipante prosegue dal questionario, non "torna" ---
+   Aggiunto settembre 2026, su indicazione del relatore. */
+(function () {
+  function sistema() {
+    var nodi = document.querySelectorAll("*");
+    for (var i = 0; i < nodi.length; i++) {
+      var e = nodi[i];
+      if (e.children.length === 0 && e.textContent.indexOf("Torna alla schermata iniziale") > -1) {
+        e.textContent = e.textContent.replace("Torna alla schermata iniziale",
+                                              "Vai alla pagina successiva");
+      }
+    }
+  }
+  if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", sistema); } else { sistema(); }
+  setInterval(sistema, 300);
+})();
+</script>
