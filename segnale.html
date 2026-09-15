@@ -452,8 +452,6 @@ table.admin th{color:var(--red);background:#150202;letter-spacing:1px;}
       <span>STATO: CONNESSO</span>
       <span>ID SESSIONE: <span id="sessId">----</span></span>
       <span>CANALE AUDIO: APERTO</span>
-      <span id="statusP1">giocatore 1: CONNESSO</span>
-      <span id="statusP2">giocatore 2: CONNESSO</span>
       <span>LINEA SICURA: ATTIVA</span>
     </div>
   </div>
@@ -686,8 +684,6 @@ const txBarWrap = $("txBarWrap"), txBar = $("txBar"), txMsg = $("txMsg");
 const waves = $("waves"), mainPanel = $("mainPanel");
 
 /* ---------------- Nomi dei giocatori simulati ---------------- */
-$("statusP1").textContent = PARAMS.p1 + ": CONNESSO";
-$("statusP2").textContent = PARAMS.p2 + ": CONNESSO";
 if(PARAMS.target){
   $("targetLine").textContent = "Destinatario del segnale: " + PARAMS.target;
 }
@@ -971,12 +967,17 @@ if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){
   document.body.classList.add("reduce-motion");
 }
 
-/* ---------------- Avvio automatico da ?pid= ------------------- */
+/* ---------------- Avvio automatico da ?pid= -------------------
+   Il partecipante ha gia' visto la schermata di connessione nel
+   questionario: qui si va dritti al pannello, senza ripeterla. */
 (function avvioAutomatico(){
   if(!PARAMS.pid) return;
-  pid.value = PARAMS.pid;
-  setupBtn.disabled = false;
-  setupBtn.click();
+  state.participantId = PARAMS.pid;
+  state.sessionId = randSessionId();
+  $("sessId").textContent = state.sessionId;
+  AudioManager.init();
+  AudioManager.resume();
+  show("mainScreen");
 })();
 </script>
 </body>
