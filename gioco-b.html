@@ -851,3 +851,55 @@ setTimeout(function () { attesa = false; passa(); }, 60);
 if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", avvia); } else { avvia(); }
 })();
 </script>
+
+<script>
+/* --- correzione dei testi rivolti al partecipante ---------------
+   Chieste dal relatore: mai "esperimento", mai "torna alla
+   schermata", sempre "vai alla pagina successiva per proseguire
+   con lo studio". Agisce sul testo mostrato, senza toccare la
+   logica del gioco. */
+(function () {
+  var REGOLE = [
+    ["Torna alla schermata iniziale per proseguire con la sessione",
+     "Vai alla pagina successiva per proseguire con lo studio"],
+    ["Vai alla pagina successiva per proseguire con la sessione",
+     "Vai alla pagina successiva per proseguire con lo studio"],
+    ["Torna alla schermata iniziale", "Vai alla pagina successiva"],
+    ["torna alla schermata iniziale", "vai alla pagina successiva"],
+    ["Torna alla schermata", "Vai alla pagina successiva"],
+    ["torna alla schermata", "vai alla pagina successiva"],
+    ["dell'esperimento", "dello studio"],
+    ["nell'esperimento", "nello studio"],
+    ["Esperimento", "Studio"],
+    ["esperimento", "studio"]
+  ];
+
+  function correggi(nodo) {
+    if (nodo.nodeType === 3) {
+      var t = nodo.nodeValue, o = t;
+      for (var i = 0; i < REGOLE.length; i++) {
+        if (t.indexOf(REGOLE[i][0]) > -1) { t = t.split(REGOLE[i][0]).join(REGOLE[i][1]); }
+      }
+      if (t !== o) { nodo.nodeValue = t; }
+      return;
+    }
+    if (nodo.nodeType !== 1) { return; }
+    if (nodo.tagName === "SCRIPT" || nodo.tagName === "STYLE") { return; }
+    for (var j = 0; j < nodo.childNodes.length; j++) { correggi(nodo.childNodes[j]); }
+  }
+
+  function passa() { if (document.body) { correggi(document.body); } }
+
+  function avvia() {
+    passa();
+    var attesa = false;
+    new MutationObserver(function () {
+      if (attesa) { return; }
+      attesa = true;
+      setTimeout(function () { attesa = false; passa(); }, 80);
+    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+  }
+
+  if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", avvia); } else { avvia(); }
+})();
+</script>
