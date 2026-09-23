@@ -899,3 +899,20 @@ if (document.readyState === "loading") { document.addEventListener("DOMContentLo
   if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", avvia); } else { avvia(); }
 })();
 </script>
+
+<script src="avatar.js?v=1"></script>
+<script>
+/* --- avatar diversi per ogni giocatore simulato (settembre 2026) ---
+   Ogni nickname ha il suo aspetto (vestiti, capelli; capelli lunghi
+   per le giocatrici), definito in avatar.js e identico a quello della
+   voodoo doll. Se avatar.js non si carica resta l'omino originale. */
+(function () {
+  if (typeof AVATAR === "undefined" || typeof createHumanoid !== "function") { return; }
+  var originale = createHumanoid;
+  createHumanoid = function (maglia, pantaloni) {
+    var chi = (maglia === 0xe63946) ? NICK.A : NICK.B;
+    var a = AVATAR.aspetto(chi);
+    return a ? AVATAR.costruisci(THREE, a) : originale(maglia, pantaloni);
+  };
+})();
+</script>
